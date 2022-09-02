@@ -284,20 +284,6 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
         resolve(player != nil)
     }
 
-    @objc(destroy:rejecter:)
-    public func destroy(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        if !hasInitialized {
-            reject("player_not_initialized", "The player is not initialized. Call setupPlayer first.", nil)
-            return
-        }
-
-        print("Destroying player")
-        self.player.stop()
-        self.player.nowPlayingInfoController.clear()
-        try? AVAudioSession.sharedInstance().setActive(false)
-        hasInitialized = false
-    }
-
     @objc(updateOptions:resolver:rejecter:)
     public func update(options: [String: Any], resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         if !hasInitialized {
@@ -510,13 +496,6 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
 
         player.pause()
         resolve(NSNull())
-    }
-
-    // NOTE: this method is really just an alias for pause. It should NOT call `player.stop` as
-    // that will reset the player, which is not the API intent.
-    @objc(stop:rejecter:)
-    public func stop(resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
-        self.pause(resolve: resolve, reject: reject)
     }
 
     @objc(seekTo:resolver:rejecter:)
@@ -799,17 +778,17 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
     }
 
     func handleAudioPlayerPlaybackEnded(reason: PlaybackEndedReason) {
+        let isRepeatModeOff = player.repeatMode == .off
+        let isPlayedUntilEnd = reason == PlaybackEndedReason.playedUntilEnd
+        let hasNextItems = player.nextItems.count == 0
+        let isQueueEndReached = hasNextItems && isPlayedUntilEnd
+
         // fire an event for the queue ending
-        if player.nextItems.count == 0 && reason == PlaybackEndedReason.playedUntilEnd {
+        if isRepeatModeOff && isQueueEndReached {
             sendEvent(withName: "playback-queue-ended", body: [
                 "track": player.currentIndex,
                 "position": player.currentTime,
             ])
-        }
-
-        // fire an event for the same track starting again
-        if player.items.count != 0 && player.repeatMode == .track {
-            handleAudioPlayerQueueIndexChange(previousIndex: player.currentIndex, nextIndex: player.currentIndex)
         }
     }
 
@@ -821,7 +800,7 @@ public class RNTrackPlayer: RCTEventEmitter, AudioSessionControllerDelegate {
 
         // Load isLiveStream option for track
         var isTrackLiveStream = false
-        if let nextIndex = nextIndex {
+        if let nextIndex = nextIndex, nextIndex < player.items.count {
             let track = player.items[nextIndex]
             isTrackLiveStream = (track as? Track)?.isLiveStream ?? false
         }
