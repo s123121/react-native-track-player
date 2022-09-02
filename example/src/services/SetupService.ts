@@ -7,7 +7,7 @@ export const SetupService = async (): Promise<boolean> => {
     await TrackPlayer.getCurrentTrack();
     isSetup = true;
   } catch {
-    await TrackPlayer.setupPlayer();
+    await TrackPlayer.setupPlayer({waitForBuffer: true});
     await TrackPlayer.updateOptions({
       stoppingAppPausesPlayback: true,
       capabilities: [
